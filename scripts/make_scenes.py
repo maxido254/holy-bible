@@ -1,6 +1,6 @@
 """Turn data/kids/animation-queue.json into new lessons using GitHub Models (free tier).
 Needs env GITHUB_TOKEN (a PAT with models:read locally, or the Actions token). Optional MODEL."""
-import json, os, re, time, urllib.request, pathlib
+import json, os, re, sys, time, urllib.error, urllib.request, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 Q, L = ROOT / "data/kids/animation-queue.json", ROOT / "data/kids/lessons.json"
 MODEL = os.environ.get("MODEL", "openai/gpt-4.1-mini")
@@ -14,7 +14,10 @@ def ask(ref, text):
     req = urllib.request.Request("https://models.github.ai/inference/chat/completions", body, {
         "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json",
         "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-    out = json.load(urllib.request.urlopen(req, timeout=120))["choices"][0]["message"]["content"]
+    try:
+        out = json.load(urllib.request.urlopen(req, timeout=120))["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"model '{MODEL}' returned HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:300]}")
     return json.loads(re.search(r"\{.*\}", out, re.S).group(0))
 def clean(d):
     items = []
@@ -27,7 +30,10 @@ def clean(d):
     if not items: raise ValueError("no usable items")
     bg = d["scene"].get("bg"); return {"bg": bg if bg in ("day","night","sunset") else "day", "items": items}, str(d["say"])[:160]
 if __name__ == "__main__":
-    lessons = json.loads(L.read_text()); have = {x["id"] for x in lessons}; added = 0
+    if not Q.exists():
+        print("No data/kids/animation-queue.json yet. In the app, tap Animate on some verses, export the list from the Kids tab, and upload it to data/kids/animation-queue.json.")
+        sys.exit(0)
+    lessons = json.loads(L.read_text()); have = {x["id"] for x in lessons}; added = 0; failed = 0
     for q in json.loads(Q.read_text()):
         lid = re.sub(r"[^a-z0-9]+", "-", q["ref"].lower()).strip("-")
         if lid in have: continue
@@ -35,6 +41,7 @@ if __name__ == "__main__":
             scene, say = clean(ask(q["ref"], q["text"]))
             lessons.append({"id": lid, "ref": q["ref"], "emoji": "📖", "say": say, "verse": q["text"], "scene": scene})
             have.add(lid); added += 1; print("ok", q["ref"])
-        except Exception as e: print("failed", q["ref"], e)
+        except Exception as e: failed += 1; print("failed", q["ref"], e)
         time.sleep(5)
     L.write_text(json.dumps(lessons, ensure_ascii=False, indent=1)); print("added", added)
+    if failed and not added: sys.exit(1)
