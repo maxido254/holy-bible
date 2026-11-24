@@ -1,5 +1,6 @@
 {
-  "appId": "com.maxido.onebible",
-  "appName": "OneBible",
-  "webDir": "www"
+  "appId": "com.maxido.holybible",
+  "appName": "Holy Bible",
+  "webDir": "www",
+  "plugins": {"CapacitorHttp": {"enabled": true}}
 }
