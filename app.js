@@ -22,9 +22,16 @@ function copy(){const p=picked();navigator.clipboard&&navigator.clipboard.writeT
 function bar(){const a=$("#act");a.hidden=S.tab!=="read"||!S.sel.size;if(a.hidden)return;
  a.replaceChildren(h("span",{},`${S.sel.size} selected`),h("button",{onclick:()=>speak(picked().map(x=>x.t).join(" "))},"Listen"),...[0,1,2,3].map(i=>h("button",{class:"dot d"+i,"aria-label":"Highlight "+(i+1),onclick:()=>mark(i)})),h("button",{onclick:()=>mark(null)},"Clear"),h("button",{onclick:queue},"Animate"),h("button",{onclick:copy},"Copy"))}
 function vbar(){$("#vbar").replaceChildren(...S.vers.map((v,i)=>h("button",{class:"chip"+(i===S.cur?" on":""),title:v.name,onclick:()=>{S.cur=i;render()}},v.id)),S.vers.length>1?h("button",{class:"chip"+(S.par?" on":""),onclick:()=>{S.par=!S.par;render()}},"Parallel"):null)}
+const isFull=()=>S.vers.some(v=>Object.keys(v.books).length>=66);
+async function getBibles(e){const b=e.currentTarget;b.disabled=true;
+ const r=await BibleDL.download(m=>{b.textContent=m});
+ if(r.ok.length){S.vers=(await BibleDL.load()).map(norm);S.cur=0;S.sel.clear()}
+ toast(r.failed.length?(r.ok.length?`Got ${r.ok.join(", ")}. Failed: ${r.failed.join(", ")}`:"Download failed. Check your internet and try again."):`Downloaded ${r.ok.join(", ")}`);
+ render()}
 function readView(){const v=S.vers[S.cur],names=BOOKS.filter(b=>v.books[b]);if(!v.books[S.book])S.book=names[0];
  const chs=Object.keys(v.books[S.book]).sort((a,b)=>a-b);if(!chs.includes(S.ch))S.ch=chs[0];
- return h("div",{},h("div",{class:"pick"},h("select",{"aria-label":"Book",onchange:e=>{S.book=e.target.value;S.ch=null;S.sel.clear();render()}},names.map(n=>h("option",{value:n,selected:n===S.book},n))),h("select",{"aria-label":"Chapter",onchange:e=>{S.ch=e.target.value;S.sel.clear();render()}},chs.map(c=>h("option",{value:c,selected:c===S.ch},c)))),
+ return h("div",{},isFull()?null:h("div",{style:"margin:.5rem 0"},h("button",{class:"main",onclick:getBibles},"Download the full Bible (KJV, ASV, YLT, BBE, NHEB)"),h("p",{class:"small"},"Free and public domain. Needs internet once, then works offline.")),
+ h("div",{class:"pick"},h("select",{"aria-label":"Book",onchange:e=>{S.book=e.target.value;S.ch=null;S.sel.clear();render()}},names.map(n=>h("option",{value:n,selected:n===S.book},n))),h("select",{"aria-label":"Chapter",onchange:e=>{S.ch=e.target.value;S.sel.clear();render()}},chs.map(c=>h("option",{value:c,selected:c===S.ch},c)))),
  h("article",{class:"text"},h("h2",{},`${S.book} ${S.ch}`),v.books[S.book][S.ch].map(x=>{const c=S.hl[key(x.n)];
   return h("p",{class:"v"+(S.sel.has(x.n)?" sel":"")+(c!=null?" hl"+c:""),onclick:e=>{S.sel.has(x.n)?S.sel.delete(x.n):S.sel.add(x.n);e.currentTarget.classList.toggle("sel");bar()}},h("sup",{},x.n)," ",x.t,
    S.par?S.vers.filter((_,i)=>i!==S.cur).map(o=>{const t=(o.books[S.book]?.[S.ch]||[]).find(y=>y.n==x.n);return t&&h("span",{class:"alt"},h("b",{},o.id+" "),t.t)}):null)})))}
@@ -50,6 +57,7 @@ function kidsView(){
 function render(){stop();document.body.className=S.tab;$("#main").replaceChildren(S.tab==="read"?readView():S.tab==="daily"?dailyView():kidsView());vbar();bar();document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t===S.tab))}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;S.play=null;render();scrollTo(0,0)});
 (async()=>{const j=async u=>{try{return await(await fetch(u)).json()}catch{return null}};
- const man=await j("data/versions.json");for(const f of(man&&man.files&&man.files.length?man.files:["data/sample.json"])){const r=await j(f);if(r)S.vers.push(norm(r))}
+ const man=await j("data/versions.json");for(const f of(man&&man.files&&man.files.length?man.files:[])){const r=await j(f);if(r)S.vers.push(norm(r))}
+ if(!S.vers.length)(await BibleDL.load()).forEach(r=>S.vers.push(norm(r)));
  if(!S.vers.length){const r=await j("data/sample.json");if(r)S.vers.push(norm(r))}
  S.daily=await j("data/daily.json")||[];S.lessons=await j("data/kids/lessons.json")||[];render();if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js")})();
