@@ -4,29 +4,50 @@ import json, os, re, sys, time, urllib.error, urllib.request, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 Q, L = ROOT / "data/kids/animation-queue.json", ROOT / "data/kids/lessons.json"
 MODEL = os.environ.get("MODEL", "openai/gpt-4.1-mini")
-FALLBACK = ["openai/gpt-4.1-mini", "openai/gpt-4.1-nano", "openai/gpt-4o-mini"]
+NEW = "https://models.github.ai/inference/chat/completions"
+OLD = "https://models.inference.ai.azure.com/chat/completions"
+TRIES = [(NEW, MODEL), (NEW, "openai/gpt-4.1-nano"), (NEW, "openai/gpt-4o-mini"), (OLD, "gpt-4o-mini"), (OLD, "gpt-4.1-mini")]
 TYPES = {"person","sheep","lamb","lion","dove","tree","sun","cloud","star","heart","water","hill"}
 ANIMS = {"bob","pulse","drift","rise","tw","spin","sway","hop",""}
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
-def call(model, ref, text):
-    body = json.dumps({"model": model, "temperature": 0.4, "messages": [
+def reply_text(raw):
+    raw = raw.strip()
+    if raw.startswith("data:"):  # streamed reply
+        parts = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("data:") and "[DONE]" not in line:
+                try:
+                    c = json.loads(line[5:])["choices"][0]
+                    parts.append((c.get("delta") or c.get("message") or {}).get("content") or "")
+                except Exception: pass
+        return "".join(parts)
+    return json.loads(raw)["choices"][0]["message"]["content"]
+def call(url, model, ref, text):
+    body = json.dumps({"model": model, "temperature": 0.4, "stream": False, "messages": [
         {"role": "system", "content": (ROOT / "scripts/scene_prompt.txt").read_text()},
         {"role": "user", "content": f"Verse: {ref}\n{text}"}]}).encode()
-    req = urllib.request.Request("https://models.github.ai/inference/chat/completions", body, {
-        "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json",
-        "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
-    out = json.load(urllib.request.urlopen(req, timeout=120))["choices"][0]["message"]["content"]
-    return json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+    req = urllib.request.Request(url, body, {
+        "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json", "Accept": "application/json"})
+    resp = urllib.request.urlopen(req, timeout=120)
+    raw = resp.read().decode("utf-8", "replace")
+    try:
+        out = reply_text(raw)
+        return json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+    except Exception as e:
+        raise ValueError(f"unreadable reply (HTTP {resp.status}, {resp.headers.get('Content-Type')}): {raw[:300]!r} [{e}]")
 def ask(ref, text):
     last = "no model tried"
-    for m in [MODEL] + [x for x in FALLBACK if x != MODEL]:
+    for url, m in TRIES:
         for attempt in range(2):
             try:
-                d = call(m, ref, text); print("  model:", m); return d
+                d = call(url, m, ref, text); print("  worked:", m, "via", url); return d
             except urllib.error.HTTPError as e:
-                last = f"{m}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:300]}"; print("  ", last)
+                last = f"{m} via {url}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:300]}"; print("  ", last)
                 if e.code == 429 and attempt == 0: time.sleep(30); continue
                 break
+            except Exception as e:
+                last = f"{m} via {url}: {e}"; print("  ", last); break
     raise RuntimeError(last)
 def clean(d):
     items = []
