@@ -7,13 +7,15 @@ const ls={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{re
 const S={vers:[],cur:0,book:"John",ch:"3",sel:new Set(),par:false,tab:"read",play:null,daily:[],lessons:[],lang:ls.get("lang",(navigator.language||"").toLowerCase().startsWith("sw")?"sw":"en"),hl:ls.get("hl",{}),q:ls.get("q",[]),done:ls.get("done",{})};
 const t=k=>S.lang==="sw"&&SW[k]||k;
 const BN=n=>S.lang==="sw"&&BOOKS.includes(n)?BOOKS_SW[BOOKS.indexOf(n)]:n;
+const L=(o,k)=>S.lang==="sw"&&o[k+"_sw"]||o[k];
+function lessonVerse(l){if(S.lang==="sw"&&l.bk){const v=S.vers.find(x=>x.id==="SWA"),a=v&&v.books[l.bk]&&v.books[l.bk][l.ch];if(a){const s=a.filter(x=>x.n>=l.v&&x.n<=(l.v2||l.v)).map(x=>x.t).join(" ");if(s)return s}}return l.verse}
 function norm(r){const o={id:r.id,name:r.name,note:r.note,books:{}};r.books.forEach((b,i)=>{const nm=r.books.length===66?BOOKS[i]:b.name,cs=b.chapters,ch={};
  (Array.isArray(cs)?cs.map((c,j)=>[j+1,c]):Object.entries(cs)).forEach(([k,c])=>{if(c)ch[k]=c.map((v,j)=>typeof v==="string"?{n:j+1,t:v}:{n:+(v.n??v.verse),t:v.t??v.text})});o.books[nm]=ch});return o}
 function toast(m){const e=$("#toast");e.textContent=m;e.hidden=false;setTimeout(()=>e.hidden=true,2600)}
 let tm;
 function stop(){clearInterval(tm);window.speechSynthesis&&speechSynthesis.cancel()}
 function speak(text,o={}){stop();if(!window.speechSynthesis)return toast(t("Speech isn't supported on this device"));
- const u=new SpeechSynthesisUtterance(text),want=S.lang==="sw"&&S.vers[S.cur]&&S.vers[S.cur].id==="SWA"?/^sw/i:/^en/i,vs=speechSynthesis.getVoices().filter(v=>want.test(v.lang));u.lang=want===/^sw/i?"sw":"en";u.voice=vs.find(v=>v.localService)||vs[0]||null;u.rate=o.kid?.85:.95;u.pitch=o.kid?1.25:1;
+ const sw=S.lang==="sw",u=new SpeechSynthesisUtterance(text),want=sw?/^sw/i:/^en/i,vs=speechSynthesis.getVoices().filter(v=>want.test(v.lang));u.lang=sw?"sw":"en";u.voice=vs.find(v=>v.localService)||vs[0]||null;u.rate=o.kid?.85:.95;u.pitch=o.kid?1.25:1;
  let got=false;u.onboundary=e=>{got=true;o.word&&o.word(e.charIndex)};u.onend=u.onerror=()=>{clearInterval(tm);o.end&&o.end()};
  if(o.word){let i=0;const ws=[...text.matchAll(/\S+/g)].map(m=>m.index);tm=setInterval(()=>{if(got)return clearInterval(tm);o.word(ws[Math.min(i++,ws.length-1)])},380)}
  speechSynthesis.speak(u)}
@@ -44,8 +46,8 @@ function readView(){const v=S.vers[S.cur],names=BOOKS.filter(b=>v.books[b]);if(!
 function dailyView(){const d=S.daily;if(!d.length)return h("p",{},t("No daily studies found. Add some to data/daily.json."));
  const i=Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/864e5)%d.length,e=d[i],day=new Date().toISOString().slice(0,10);
  const text=(S.vers[S.cur].books[e.book]?.[e.ch]||[]).filter(x=>x.n>=e.from&&x.n<=e.to).map(x=>x.t).join(" ");
- return h("article",{class:"text"},h("h2",{},e.title),h("p",{class:"ref"},`${BN(e.book)} ${e.ch}:${e.from}-${e.to} (${S.vers[S.cur].id})`),h("blockquote",{},text||t("This passage isn't in the selected version yet.")),text&&h("button",{onclick:()=>speak(text)},t("Listen")),
-  h("h3",{},t("Reflect")),h("p",{},e.note),h("h3",{},t("Think about it")),h("p",{},e.question),
+ return h("article",{class:"text"},h("h2",{},L(e,"title")),h("p",{class:"ref"},`${BN(e.book)} ${e.ch}:${e.from}-${e.to} (${S.vers[S.cur].id})`),h("blockquote",{},text||t("This passage isn't in the selected version yet.")),text&&h("button",{onclick:()=>speak(text)},t("Listen")),
+  h("h3",{},t("Reflect")),h("p",{},L(e,"note")),h("h3",{},t("Think about it")),h("p",{},L(e,"question")),
   h("button",{class:"main",onclick:()=>{S.done[day]=!S.done[day];ls.set("done",S.done);render()}},S.done[day]?t("Done today"):t("Mark as done")),h("p",{class:"small"},`${t("Days completed")}: ${Object.values(S.done).filter(Boolean).length}`))}
 const stars=[[40,30],[120,60],[330,40],[290,90],[70,170],[350,180]].map(([x,y],i)=>`<circle class="tw" style="animation-delay:${i*.3}s" cx="${x}" cy="${y}" r="3" fill="#fff"/>`).join("");
 const sheep=(x,y,d)=>`<g class="bob" style="animation-delay:${d}s"><ellipse cx="${x}" cy="${y}" rx="26" ry="18" fill="#fff"/><circle cx="${x+24}" cy="${y-4}" r="9" fill="#333"/><rect x="${x-14}" y="${y+14}" width="5" height="13" fill="#333"/><rect x="${x+10}" y="${y+14}" width="5" height="13" fill="#333"/></g>`;
@@ -54,10 +56,10 @@ light:`<svg viewBox="0 0 400 240"><rect width="400" height="240" fill="#0b1030"/
 shepherd:`<svg viewBox="0 0 400 240"><rect width="400" height="240" fill="#8fd3ff"/><circle class="pulse" cx="330" cy="50" r="28" fill="#ffd93b"/><g class="drift"><ellipse cx="60" cy="50" rx="40" ry="14" fill="#fff"/><ellipse cx="90" cy="42" rx="26" ry="12" fill="#fff"/></g><ellipse cx="120" cy="260" rx="260" ry="110" fill="#5cb85c"/><ellipse cx="330" cy="270" rx="220" ry="90" fill="#4aa54a"/>${sheep(110,170,0)}${sheep(210,190,.4)}${sheep(300,165,.8)}</svg>`,
 heart:`<svg viewBox="0 0 400 240"><rect width="400" height="240" fill="#ffd6e7"/><path class="pulse" d="M200 215C80 140 90 40 150 40c25 0 42 14 50 32 8-18 25-32 50-32 60 0 70 100-50 175z" fill="#ff4d7d"/><g font-size="26" fill="#ff4d7d"><text class="rise" x="40" y="220">♥</text><text class="rise" style="animation-delay:1.3s" x="340" y="220">♥</text><text class="rise" style="animation-delay:2.4s" x="90" y="230">♥</text><text class="rise" style="animation-delay:.7s" x="300" y="230">♥</text></g></svg>`};
 function kidsView(){
- if(S.play){const l=S.play,txt=`${l.say} ${l.verse}`,ws=[...txt.matchAll(/\S+/g)].map(m=>{const s=h("span",{class:"w"},m[0]+" ");s.i=m.index;return s}),on=ci=>ws.forEach(s=>s.classList.toggle("on",s.i<=ci&&ci<s.i+s.textContent.length-1));
+ if(S.play){const l=S.play,txt=`${L(l,"say")} ${lessonVerse(l)}`,ws=[...txt.matchAll(/\S+/g)].map(m=>{const s=h("span",{class:"w"},m[0]+" ");s.i=m.index;return s}),on=ci=>ws.forEach(s=>s.classList.toggle("on",s.i<=ci&&ci<s.i+s.textContent.length-1));
   const stage=h("div",{class:"stage"});if(l.video){stage.append(h("video",{src:l.video,controls:true,playsinline:true}))}else stage.innerHTML=typeof l.scene==="object"?KIT.render(l.scene):SC[l.scene]||SC.light;
-  return h("div",{},h("button",{onclick:()=>{S.play=null;render()}},t("Back")),h("h2",{},l.ref),stage,h("p",{class:"cap"},ws),h("button",{class:"main",onclick:()=>speak(txt,{kid:true,word:on,end:()=>on(-1)})},t("Read to me")))}
- return h("section",{},h("h2",{},t("Sunday school")),h("div",{class:"grid"},S.lessons.map(l=>h("button",{class:"lesson",onclick:()=>{S.play=l;render()}},h("b",{},l.emoji),l.ref))),
+  return h("div",{},h("button",{onclick:()=>{S.play=null;render()}},t("Back")),h("h2",{},L(l,"ref")),stage,h("p",{class:"cap"},ws),h("button",{class:"main",onclick:()=>speak(txt,{kid:true,word:on,end:()=>on(-1)})},t("Read to me")))}
+ return h("section",{},h("h2",{},t("Sunday school")),h("div",{class:"grid"},S.lessons.map(l=>h("button",{class:"lesson",onclick:()=>{S.play=l;render()}},h("b",{},l.emoji),L(l,"ref")))),
   h("h3",{},`${t("Verses waiting to be animated")} (${S.q.length})`),h("p",{class:"small"},t("Pick verses in Read and tap Animate. Export the list, make the cartoons online, then add them to data/kids/lessons.json.")),
   S.q.length?h("div",{},S.q.map(q=>h("p",{class:"small"},`${q.ref} (${q.version})`)),h("button",{class:"main",onclick:()=>{const a=h("a",{href:URL.createObjectURL(new Blob([JSON.stringify(S.q,null,2)],{type:"application/json"})),download:"animation-queue.json"});a.click()}},t("Export list")),h("button",{onclick:()=>{S.q=[];ls.set("q",[]);render()}},t("Clear list"))):null)}
 const NAVL={read:"Read",daily:"Daily",kids:"Kids"};
