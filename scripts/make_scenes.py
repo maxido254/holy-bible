@@ -1,17 +1,21 @@
-"""Turn data/kids/animation-queue.json into new lessons using GitHub Models (free tier).
-Needs env GITHUB_TOKEN (a PAT with models:read locally, or the Actions token). Optional MODEL."""
+"""Turn data/kids/animation-queue.json into new lessons using a free AI.
+First choice: GitHub Models (needs GITHUB_TOKEN). Backup: Pollinations (no key; only the public verse text is sent).
+Optional env MODEL overrides the first GitHub model."""
 import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 Q, L = ROOT / "data/kids/animation-queue.json", ROOT / "data/kids/lessons.json"
 MODEL = os.environ.get("MODEL", "openai/gpt-4.1-mini")
-URL = "https://models.github.ai/inference/chat/completions"
-TRIES = [(URL, MODEL), (URL, "openai/gpt-4.1-nano"), (URL, "openai/gpt-4o-mini")]
+GH = "https://models.github.ai/inference/chat/completions"
+POLL = "https://text.pollinations.ai/openai"
+TRIES = [(GH, MODEL), (GH, "openai/gpt-4.1-nano"), (POLL, "openai"), (POLL, "mistral")]
+TRUSTED_TOKEN_HOSTS = ("github.ai", "github.com")
 TYPES = {"person","sheep","lamb","lion","dove","tree","sun","cloud","star","heart","water","hill"}
 ANIMS = {"bob","pulse","drift","rise","tw","spin","sway","hop",""}
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *a, **k): return None
 OPENER = urllib.request.build_opener(_NoRedirect)
+def host_ok(url, domains): return any((urllib.parse.urlparse(url).hostname or "").endswith(d) for d in domains)
 def reply_text(raw):
     raw = raw.strip()
     if raw.startswith("data:"):  # streamed reply
@@ -29,17 +33,17 @@ def call(url, model, ref, text):
     body = json.dumps({"model": model, "temperature": 0.4, "messages": [
         {"role": "system", "content": (ROOT / "scripts/scene_prompt.txt").read_text()},
         {"role": "user", "content": f"Verse: {ref}\n{text}"}]}).encode()
-    headers = {"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Content-Type": "application/json",
-               "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "holy-bible-scenes"}
     for hop in range(4):
+        headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "holy-bible-scenes"}
+        if host_ok(url, TRUSTED_TOKEN_HOSTS):  # the token goes only to GitHub, never to the backup AI
+            headers.update({"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
         try:
             resp = OPENER.open(urllib.request.Request(url, body, headers, method="POST"), timeout=120); break
         except urllib.error.HTTPError as e:
             loc = e.headers.get("Location") if e.code in (301, 302, 303, 307, 308) else None
             if not loc: raise
-            loc = urllib.parse.urljoin(url, loc); host = urllib.parse.urlparse(loc).hostname or ""
-            print("   redirected to", loc)
-            if not (host.endswith("github.ai") or host.endswith("github.com")): raise ValueError("redirect to untrusted host " + host)
+            loc = urllib.parse.urljoin(url, loc); print("   redirected to", loc)
+            if not host_ok(loc, TRUSTED_TOKEN_HOSTS + ("pollinations.ai",)): raise ValueError("redirect to untrusted host " + loc)
             url = loc
     else: raise ValueError("too many redirects")
     raw = resp.read().decode("utf-8", "replace")
@@ -47,19 +51,19 @@ def call(url, model, ref, text):
         out = reply_text(raw)
         return json.loads(re.search(r"\{.*\}", out, re.S).group(0))
     except Exception as e:
-        raise ValueError(f"unreadable reply (HTTP {resp.status} from {resp.geturl()}, headers {dict(resp.headers)}): {raw[:300]!r} [{e}]")
+        raise ValueError(f"unreadable reply (HTTP {resp.status}, {dict(resp.headers)}): {raw[:200]!r} [{e}]")
 def ask(ref, text):
     last = "no model tried"
     for url, m in TRIES:
         for attempt in range(2):
             try:
-                d = call(url, m, ref, text); print("  worked:", m); return d
+                d = call(url, m, ref, text); print("  worked:", m, "via", urllib.parse.urlparse(url).hostname); return d
             except urllib.error.HTTPError as e:
-                last = f"{m}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:300]}"; print("  ", last)
+                last = f"{m}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:200]}"; print("  ", last)
                 if e.code == 429 and attempt == 0: time.sleep(30); continue
                 break
             except Exception as e:
-                last = f"{m}: {e}"; print("  ", last); break
+                last = f"{m}: {e}"; print("  ", str(last)[:400]); break
     raise RuntimeError(last)
 def clean(d):
     items = []
@@ -89,7 +93,7 @@ if __name__ == "__main__":
             lessons.append({"id": lid, "ref": ref, "bk": q["book"], "ch": str(q["chapter"]), "v": first, "v2": last, "emoji": "\ud83d\udcd6",
                             "say": say, "verse": short(q["text"], 300), "scene": scene})
             have.add(lid); added += 1; print("ok", ref)
-        except Exception as e: failed += 1; print("failed", ref, e)
+        except Exception as e: failed += 1; print("failed", ref, str(e)[:400])
         time.sleep(5)
     L.write_text(json.dumps(lessons, ensure_ascii=False, indent=1)); print("added", added, "failed", failed)
     if failed and not added: sys.exit(1)
