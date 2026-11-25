@@ -1,6 +1,7 @@
 // Downloads Bibles in the browser/app and keeps them on the device (IndexedDB).
 // English (public domain): github.com/scrollmapper/bible_databases. Swahili: eBible.org Swahili Unlocked Literal Bible (CC BY-SA 4.0).
 // If a source changes its layout, edit SRC / BASES / SWA_URLS.
+// Also contains Voice: records the user's own voice and keeps the clips on the device.
 const BibleDL=(()=>{
 const SRC={KJV:["KJVPCE","KJV"],ASV:["ASV"],YLT:["YLT"],BBE:["BBE"],NHEB:["NHEB"]};
 const NAME={KJV:"King James Version",ASV:"American Standard Version",YLT:"Young's Literal Translation",BBE:"Bible in Basic English",NHEB:"New Heart English Bible",SWA:"Biblia Takatifu (Kiswahili)"};
@@ -50,3 +51,24 @@ async function download(progress){const have=new Set((await load()).map(r=>r.id)
  for(const id of todo){progress&&progress({id,i:++i,n:todo.length});(await(id==="SWA"?swahili():english(id))?ok:failed).push(id)}
  return{ok,failed}}
 return{ids:IDS,load,download}})();
+
+// ---- Voice: record your own voice; clips stay on this device (IndexedDB) ----
+const Voice=(()=>{
+const open=()=>new Promise((ok,no)=>{const r=indexedDB.open("holybible-voice",1);r.onupgradeneeded=()=>r.result.createObjectStore("clips");r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+const tx=async(mode,fn)=>{const d=await open();return new Promise((ok,no)=>{const t=d.transaction("clips",mode),q=fn(t.objectStore("clips"));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>no(t.error)})};
+const keys=new Set();let rec=null,audio=null,finish=null;
+async function init(){try{(await tx("readonly",s=>s.getAllKeys())).forEach(k=>keys.add(k))}catch{}}
+const has=k=>keys.has(k);
+const recording=()=>!!rec;
+async function start(){if(!navigator.mediaDevices||!window.MediaRecorder)throw new Error("unsupported");
+ const stream=await navigator.mediaDevices.getUserMedia({audio:true}),chunks=[],mr=new MediaRecorder(stream);
+ mr.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+ const done=new Promise(ok=>{mr.onstop=()=>{stream.getTracks().forEach(t=>t.stop());ok(new Blob(chunks,{type:mr.mimeType||"audio/webm"}))}});
+ mr.start();rec={mr,done}}
+async function stop(key){const r=rec;rec=null;if(!r)return;r.mr.stop();const blob=await r.done;if(!blob.size)throw new Error("empty recording");await tx("readwrite",s=>s.put(blob,key));keys.add(key)}
+async function remove(key){await tx("readwrite",s=>s.delete(key));keys.delete(key)}
+function halt(){if(audio){const f=finish;audio.pause();audio=null;finish=null;f&&f(false)}}
+// resolves true when the clip played to the end, false if missing or stopped
+function play(key){halt();return tx("readonly",s=>s.get(key)).then(blob=>{if(!blob)return false;return new Promise(ok=>{const url=URL.createObjectURL(blob),a=new Audio(url);audio=a;
+ finish=v=>{URL.revokeObjectURL(url);ok(v)};a.onended=()=>{audio=null;const f=finish;finish=null;f&&f(true)};a.onerror=()=>{audio=null;const f=finish;finish=null;f&&f(false)};a.play().catch(()=>a.onerror())})})}
+return{init,has,start,stop,recording,remove,play,halt}})();
