@@ -11,7 +11,9 @@ try {
   let x = fs.readFileSync(man, "utf8");
   const add = ["android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"]
     .filter(p => !x.includes(p)).map(p => `    <uses-permission android:name="${p}" />\n`).join("");
-  if (add) { x = x.replace(/<\/manifest>/, add + "</manifest>"); fs.writeFileSync(man, x); console.log("patch-android: added microphone permission"); }
+  // Android 11+ hides other apps unless declared; without this the phone's speech engine can't be found for read-aloud.
+  const tts = x.includes("android.intent.action.TTS_SERVICE") ? "" : `    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>\n`;
+  if (add || tts) { x = x.replace(/<\/manifest>/, add + tts + "</manifest>"); fs.writeFileSync(man, x); console.log("patch-android: updated manifest (microphone permission, speech engine visibility)"); }
 } catch (e) { console.log("patch-android: permission step skipped:", e.message); }
 
 try {

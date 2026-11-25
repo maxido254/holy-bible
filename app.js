@@ -12,13 +12,18 @@ function lessonVerse(l){if(S.lang==="sw"&&l.bk){const v=S.vers.find(x=>x.id==="S
 function norm(r){const o={id:r.id,name:r.name,note:r.note,books:{}};r.books.forEach((b,i)=>{const nm=r.books.length===66?BOOKS[i]:b.name,cs=b.chapters,ch={};
  (Array.isArray(cs)?cs.map((c,j)=>[j+1,c]):Object.entries(cs)).forEach(([k,c])=>{if(c)ch[k]=c.map((v,j)=>typeof v==="string"?{n:j+1,t:v}:{n:+(v.n??v.verse),t:v.t??v.text})});o.books[nm]=ch});return o}
 function toast(m){const e=$("#toast");e.textContent=m;e.hidden=false;setTimeout(()=>e.hidden=true,2600)}
-let tm;
-function halt(){clearInterval(tm);window.speechSynthesis&&speechSynthesis.cancel();Voice.halt()}
+let tm,sid=0;
+// The Android WebView has no working speechSynthesis, so inside the app we use the native Text-to-Speech plugin.
+const nativeTTS=()=>{try{return window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform()&&Capacitor.Plugins&&Capacitor.Plugins.TextToSpeech||null}catch{return null}};
+function halt(){clearInterval(tm);sid++;window.speechSynthesis&&speechSynthesis.cancel();const n=nativeTTS();if(n)try{n.stop().catch(()=>{})}catch{}Voice.halt()}
 function stop(){halt();S.tk++}
-function speak(text,o={}){halt();if(!window.speechSynthesis){toast(t("Speech isn't supported on this device"));o.end&&o.end();return}
- const sw=S.lang==="sw",u=new SpeechSynthesisUtterance(text),want=sw?/^sw/i:/^en/i,vs=speechSynthesis.getVoices().filter(v=>want.test(v.lang));u.lang=sw?"sw":"en";u.voice=vs.find(v=>v.localService)||vs[0]||null;u.rate=o.kid?.85:.95;u.pitch=o.kid?1.25:1;
- let got=false;u.onboundary=e=>{got=true;o.word&&o.word(e.charIndex)};u.onend=u.onerror=()=>{clearInterval(tm);o.end&&o.end()};
- if(o.word){let i=0;const ws=[...text.matchAll(/\S+/g)].map(m=>m.index);tm=setInterval(()=>{if(got)return clearInterval(tm);o.word(ws[Math.min(i++,ws.length-1)])},380)}
+function speak(text,o={}){halt();const id=sid,n=nativeTTS();
+ if(!n&&!window.speechSynthesis){toast(t("Speech isn't supported on this device"));o.end&&o.end();return}
+ const sw=S.lang==="sw",fin=()=>{if(id!==sid)return;clearInterval(tm);o.end&&o.end()};let got=false;
+ const timer=()=>{if(o.word){let i=0;const ws=[...text.matchAll(/\S+/g)].map(m=>m.index);tm=setInterval(()=>{if(got)return clearInterval(tm);o.word(ws[Math.min(i++,ws.length-1)])},380)}};
+ if(n){timer();n.speak({text,lang:sw?"sw-KE":"en-US",rate:o.kid?.85:.95,pitch:o.kid?1.25:1,volume:1,category:"ambient"}).then(fin,()=>{if(id===sid)toast(t("Speech isn't supported on this device"));fin()});return}
+ const u=new SpeechSynthesisUtterance(text),want=sw?/^sw/i:/^en/i,vs=speechSynthesis.getVoices().filter(v=>want.test(v.lang));u.lang=sw?"sw":"en";u.voice=vs.find(v=>v.localService)||vs[0]||null;u.rate=o.kid?.85:.95;u.pitch=o.kid?1.25:1;
+ u.onboundary=e=>{got=true;o.word&&o.word(e.charIndex)};u.onend=u.onerror=fin;timer();
  speechSynthesis.speak(u)}
 // Plays each item in order: your own recording if you made one, otherwise the phone's voice.
 async function listen(items){stop();const my=S.tk;
@@ -60,7 +65,7 @@ function readView(){const v=S.vers[S.cur],names=BOOKS.filter(b=>v.books[b]);if(!
   return h("p",{class:"v"+(S.sel.has(x.n)?" sel":"")+(c!=null?" hl"+c:""),onclick:e=>{S.sel.has(x.n)?S.sel.delete(x.n):S.sel.add(x.n);e.currentTarget.classList.toggle("sel");bar()}},h("sup",{},x.n)," ",Voice.has(vkey(x.n))?"\ud83c\udf99 ":null,x.t,
    S.par?S.vers.filter((_,i)=>i!==S.cur).map(o=>{const tt=(o.books[S.book]?.[S.ch]||[]).find(y=>y.n==x.n);return tt&&h("span",{class:"alt"},h("b",{},o.id+" "),tt.t)}):null)}),v.note?h("p",{class:"small"},v.note):null))}
 function dailyView(){const d=S.daily;if(!d.length)return h("p",{},t("No daily studies found. Add some to data/daily.json."));
- const i=Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/864e5)%d.length,e=d[i],day=new Date().toISOString().slice(0,10);
+ const i=Math.floor((Date.now()-new Date(new Date().getFullYear(),0,0))/864e5)%d.length,e=d[i],day=(n=>`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`)(new Date());
  const text=(S.vers[S.cur].books[e.book]?.[e.ch]||[]).filter(x=>x.n>=e.from&&x.n<=e.to).map(x=>x.t).join(" ");
  const dk=`d|${S.vers[S.cur].id}|${e.book}|${e.ch}|${e.from}-${e.to}`,rk=`r|${S.lang}|${e.title}`;
  return h("article",{class:"text"},h("h2",{},L(e,"title")),h("p",{class:"ref"},`${BN(e.book)} ${e.ch}:${e.from}-${e.to} (${S.vers[S.cur].id})`),h("blockquote",{},text||t("This passage isn't in the selected version yet.")),text&&h("button",{onclick:()=>listen([{key:dk,text}])},t("Listen")),text&&voiceRow(dk),

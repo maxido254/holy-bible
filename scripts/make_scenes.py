@@ -60,7 +60,7 @@ def ask(ref, text):
                 d = call(url, m, ref, text); print("  worked:", m, "via", urllib.parse.urlparse(url).hostname); return d
             except urllib.error.HTTPError as e:
                 last = f"{m}: HTTP {e.code} {e.read().decode('utf-8', 'replace')[:200]}"; print("  ", last)
-                if e.code == 429 and attempt == 0: time.sleep(30); continue
+                if e.code in (402, 429) and attempt == 0: time.sleep(45); continue  # free tiers allow ~1 reply per 45 s
                 break
             except Exception as e:
                 last = f"{m}: {e}"; print("  ", str(last)[:400]); break
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         if lid in have: print("skip (already exists)", ref); continue
         try:
             scene, say = clean(ask(ref, short(q["text"], 700)))
-            lessons.append({"id": lid, "ref": ref, "bk": q["book"], "ch": str(q["chapter"]), "v": first, "v2": last, "emoji": "\ud83d\udcd6",
+            lessons.append({"id": lid, "ref": ref, "bk": q["book"], "ch": str(q["chapter"]), "v": first, "v2": last, "emoji": "\U0001F4D6",
                             "say": say, "verse": short(q["text"], 300), "scene": scene})
             have.add(lid); added += 1; print("ok", ref)
         except Exception as e: failed += 1; print("failed", ref, str(e)[:400])
