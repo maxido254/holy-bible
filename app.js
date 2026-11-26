@@ -10,7 +10,7 @@ const BN=n=>S.lang==="sw"&&BOOKS.includes(n)?BOOKS_SW[BOOKS.indexOf(n)]:n;
 const L=(o,k)=>S.lang==="sw"&&o[k+"_sw"]||o[k];
 function lessonVerse(l){if(S.lang==="sw"&&l.bk){const v=S.vers.find(x=>x.id==="SWA"),a=v&&v.books[l.bk]&&v.books[l.bk][l.ch];if(a){const s=a.filter(x=>x.n>=l.v&&x.n<=(l.v2||l.v)).map(x=>x.t).join(" ");if(s)return s}}return l.verse}
 function norm(r){const o={id:r.id,name:r.name,note:r.note,books:{}};r.books.forEach((b,i)=>{const nm=r.books.length===66?BOOKS[i]:b.name,cs=b.chapters,ch={};
- (Array.isArray(cs)?cs.map((c,j)=>[j+1,c]):Object.entries(cs)).forEach(([k,c])=>{if(c)ch[k]=c.map((v,j)=>typeof v==="string"?{n:j+1,t:v}:{n:+(v.n??v.verse),t:v.t??v.text})});o.books[nm]=ch});return o}
+ (Array.isArray(cs)?cs.map((c,j)=>[j+1,c]):Object.entries(cs)).forEach(([k,c])=>{if(c)ch[k]=c.map((v,j)=>typeof v==="string"?{n:j+1,t:v}:{n:+(v.n??v.verse),t:v.t??v.text}).filter(x=>x.t)});o.books[nm]=ch});return o}
 function toast(m){const e=$("#toast");e.textContent=m;e.hidden=false;setTimeout(()=>e.hidden=true,2600)}
 let tm,sid=0;
 // The Android WebView has no working speechSynthesis, so inside the app we use the native Text-to-Speech plugin.

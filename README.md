@@ -2,10 +2,11 @@
 Installable web app (PWA): several free Bible versions in one place, read-aloud, highlights, daily study, and a Sunday school section with animated cartoon verses for kids.
 
 ## Run
-1. `python scripts/fetch_bibles.py` (once, online) downloads KJV, ASV, YLT, BBE, NHEB. Without it the app runs on a few sample KJV passages.
-2. `python -m http.server 8000`, then open http://localhost:8000
-3. Host free with GitHub Pages (Settings > Pages > deploy from branch `main`). Install from the browser menu.
-For the App Store / Play Store, wrap it with Capacitor (`npm i @capacitor/core @capacitor/cli`).
+The Bibles are already bundled in `data/` (full Genesis to Revelation): KJV, ASV, YLT, BBE, NHEB (English, public domain) and Biblia Takatifu, the Swahili Unlocked Literal Bible (SWA, CC BY-SA 4.0). Nothing needs downloading, and the app works offline.
+1. `python -m http.server 8000`, then open http://localhost:8000
+2. Host free with GitHub Pages (Settings > Pages > deploy from branch `main`). Install from the browser menu.
+3. Android: run the `Build Android app` Action and download the APK. The cross logo in `assets/` is used as the launcher icon (edit `icon.svg`, `icon-fg.svg`, `icon-bg.svg`, then re-render the PNGs).
+`scripts/fetch_bibles.py` can still refresh the English files from scrollmapper/bible_databases.
 
 ## Features
 - Read: choose version, book, chapter. Tap verses to select, then Listen, Highlight (4 colors), Copy, or Animate. "Parallel" shows every version under each verse.

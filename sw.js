@@ -1,4 +1,4 @@
-const C="holybible-v6";
-self.addEventListener("install",e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(["./","index.html","style.css","app.js","scenes.js","download.js","manifest.webmanifest","icon.svg","data/sample.json","data/daily.json","data/kids/lessons.json"])));self.skipWaiting()});
+const C="holybible-v7";
+self.addEventListener("install",e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(["./","index.html","style.css","app.js","scenes.js","download.js","manifest.webmanifest","icon.svg","icon-192.png","icon-512.png","data/versions.json","data/KJV.json","data/ASV.json","data/YLT.json","data/BBE.json","data/NHEB.json","data/SWA.json","data/sample.json","data/daily.json","data/kids/lessons.json"])));self.skipWaiting()});
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>clients.claim())));
 self.addEventListener("fetch",e=>{if(e.request.method!=="GET"||new URL(e.request.url).origin!==location.origin)return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const cp=res.clone();caches.open(C).then(c=>c.put(e.request,cp))}return res})))});

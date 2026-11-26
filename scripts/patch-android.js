@@ -18,11 +18,15 @@ try {
 
 try {
   if (!fs.existsSync(path.join(root, "android/app/src/main/res"))) throw new Error("no android project yet");
-  try { sh("rsvg-convert --version"); } catch { sh("sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin"); }
-  fs.mkdirSync(path.join(root, "assets"), { recursive: true });
-  sh("rsvg-convert -w 1024 -h 1024 icon.svg -o assets/icon-only.png");
-  sh("rsvg-convert -w 1024 -h 1024 icon-fg.svg -o assets/icon-foreground.png");
-  sh("convert -size 1024x1024 xc:'#0E1A2B' assets/icon-background.png");
-  sh("npx capacitor-assets generate --android --iconBackgroundColor '#0E1A2B' --iconBackgroundColorDark '#0E1A2B'");
-  console.log("patch-android: Holy Bible icon created");
+  // The cross logo PNGs are committed in assets/, so no extra image tools are needed.
+  // Only if one is missing do we try to render it from the SVGs.
+  const need = [["icon-only.png", "icon.svg"], ["icon-foreground.png", "icon-fg.svg"], ["icon-background.png", "icon-bg.svg"]]
+    .filter(([png]) => !fs.existsSync(path.join(root, "assets", png)));
+  if (need.length) {
+    try { sh("rsvg-convert --version"); } catch { sh("sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin"); }
+    fs.mkdirSync(path.join(root, "assets"), { recursive: true });
+    need.forEach(([png, svg]) => sh(`rsvg-convert -w 1024 -h 1024 ${svg} -o assets/${png}`));
+  }
+  sh("npx capacitor-assets generate --android --iconBackgroundColor '#0A1322' --iconBackgroundColorDark '#0A1322'");
+  console.log("patch-android: Holy Bible cross icon created");
 } catch (e) { console.log("patch-android: icon step skipped:", e.message); }

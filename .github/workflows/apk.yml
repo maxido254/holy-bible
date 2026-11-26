@@ -18,7 +18,7 @@ jobs:
       - run: npm install
       - run: |
           mkdir -p www
-          cp -r index.html app.js scenes.js download.js style.css sw.js manifest.webmanifest icon.svg data www/
+          cp -r index.html app.js scenes.js download.js style.css sw.js manifest.webmanifest icon.svg icon-192.png icon-512.png data www/
       - run: npx cap add android
       - run: npx cap sync android
       - run: cd android && ./gradlew assembleDebug
