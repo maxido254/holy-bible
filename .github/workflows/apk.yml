@@ -2,7 +2,7 @@ name: Build Android app
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -26,3 +26,9 @@ jobs:
         with:
           name: OneBible-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk HolyBible.apk
+          gh release create "v1.0.${{ github.run_number }}" HolyBible.apk --title "Holy Bible v1.0.${{ github.run_number }}" --notes "Full Bible (KJV, ASV, YLT, BBE, NHEB, Swahili), read-aloud, kids section. Download HolyBible.apk on your Android phone and install it (allow installs from this source if asked)."
